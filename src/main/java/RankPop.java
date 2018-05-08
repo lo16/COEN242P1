@@ -19,15 +19,58 @@ import java.io.IOException;
 public class RankPop {
     public static class MapForRankPop extends Mapper<LongWritable, Text, Text,
             IntWritable> {
+
+        private BufferedReader br;
+        private static HashMap<String, String> movieTitles = new HashMap<String, String>();
+
+
+        protected void setup(Context context) throws IOException, InterruptedException {
+            //pass path to movies.csv to loadMoviesHashMap
+        }
+
+
+        //open movies.csv and store movie titles in a hash table
+        private void loadMoviesHashMap(Path filePath, Context context)
+            throws IOException {
+
+        String strLineRead = "";
+
+        try {
+            br = new BufferedReader(new FileReader(filePath.toString()));
+
+            // Read each line, split and load to HashMap
+            while ((strLineRead = br.readLine()) != null) {
+                String movieFields[] = strLineRead.split(",");
+                String movieId = movieFields[0];
+                String movieTitle = movieFields[1];
+                
+                //handle movie titles containing commas
+                for(int i = 2; i < movieFields.length - 1; i++) {
+                    movieTitle = String.join(movieTitle, ",", movieFields[i]);
+                }
+
+                movieTitles.put(movieId.trim(), movieTitle.trim());
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }finally {
+            if (br != null) {
+                br.close();
+            }
+        }
+
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
-            String line = value.toString();
-            String[] words = line.split(",");
+
+            String line = value.toString(); 
+            String[] words=line.split(",");
+            String movieId = words[1];
+
             IntWritable outputValue = new IntWritable(1);
-            for (String word : words) {
-                Text outputKey = new Text(word.toUpperCase().trim());
-                con.write(outputKey, outputValue);
-            }
+            Text outputKey = new Text(movieTitles.get(movieId.trim()));
+            con.write(outputKey, outputValue);
         }
     }
 
