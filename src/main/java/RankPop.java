@@ -11,7 +11,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
-
+import java.io.BufferedReader;
 
 /**
  * List each movie's rating count, sort by rating count
@@ -26,6 +26,14 @@ public class RankPop {
 
         protected void setup(Context context) throws IOException, InterruptedException {
             //pass path to movies.csv to loadMoviesHashMap
+            Path[] cacheFilesLocal = DistributedCache.getLocalCacheFiles(context
+                .getConfiguration());
+
+            for (Path eachPath : cacheFilesLocal) {
+                if (eachPath.getName().toString().trim().equals("movies.csv")) {
+                    loadMoviesHashMap(eachPath, context);
+                }
+            }
         }
 
 
@@ -97,6 +105,19 @@ public class RankPop {
         job.setMapperClass(MapForRankPop.class);
 // setup reducer
         job.setReducerClass(ReduceForRankPop.class);
+
+        DistributedCache
+                .addCacheFile(
+                        new URI(
+                                "/user/bigdata13/dataset/movies/movies.csv"),
+                        config);
+
+        DistributedCache
+                .addCacheFile(
+                        new URI(
+                                "/user/bigdata13/dataset_large/movies/movies_large.csv"),
+                        config);
+
 // set input/output path
         Path input = new Path(files[0]);
         Path output = new Path(files[1]);
