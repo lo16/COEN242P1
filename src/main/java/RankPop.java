@@ -1,4 +1,5 @@
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -10,12 +11,17 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.BufferedReader;
+import java.net.URI;
+import java.util.HashMap;
 
 /**
  * List each movie's rating count, sort by rating count
  */
+
 public class RankPop {
     public static class MapForRankPop extends Mapper<LongWritable, Text, Text,
             IntWritable> {
@@ -24,8 +30,9 @@ public class RankPop {
         private static HashMap<String, String> movieTitles = new HashMap<String, String>();
 
 
+
         protected void setup(Context context) throws IOException, InterruptedException {
-            //pass path to movies.csv to loadMoviesHashMap
+            // pass path to movies.csv to loadMoviesHashMap
             Path[] cacheFilesLocal = DistributedCache.getLocalCacheFiles(context
                 .getConfiguration());
 
@@ -37,35 +44,35 @@ public class RankPop {
         }
 
 
-        //open movies.csv and store movie titles in a hash table
+        // open movies.csv and store movie titles in a hash table
         private void loadMoviesHashMap(Path filePath, Context context)
             throws IOException {
 
-        String strLineRead = "";
+            String strLineRead = "";
 
-        try {
-            br = new BufferedReader(new FileReader(filePath.toString()));
+            try {
+                br = new BufferedReader(new FileReader(filePath.toString()));
 
-            // Read each line, split and load to HashMap
-            while ((strLineRead = br.readLine()) != null) {
-                String movieFields[] = strLineRead.split(",");
-                String movieId = movieFields[0];
-                String movieTitle = movieFields[1];
-                
-                //handle movie titles containing commas
-                for(int i = 2; i < movieFields.length - 1; i++) {
-                    movieTitle = String.join(movieTitle, ",", movieFields[i]);
+                // Read each line, split and load to HashMap
+                while ((strLineRead = br.readLine()) != null) {
+                    String movieFields[] = strLineRead.split(",");
+                    String movieId = movieFields[0];
+                    String movieTitle = movieFields[1];
+
+                    // handle movie titles containing commas
+                    for (int i = 2; i < movieFields.length - 1; i++) {
+                        movieTitle = movieTitle + ", " + movieFields[i];
+                    }
+                    movieTitles.put(movieId.trim(), movieTitle.trim());
                 }
-
-                movieTitles.put(movieId.trim(), movieTitle.trim());
-            }
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }finally {
-            if (br != null) {
-                br.close();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                if (br != null) {
+                    br.close();
+                }
             }
         }
 
@@ -95,37 +102,39 @@ public class RankPop {
     }
 
     public static void main(String[] args) throws Exception {
-// Get input argument and setup configuration
+        // Get input argument and setup configuration
         Configuration config = new Configuration();
+
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
-// setup mapreduce job
-        Job job = new Job(config, "rankpop");
+        // setup mapreduce job
+        Job job = new Job(config, "Part 1: rank pop");
         job.setJarByClass(RankPop.class);
-// setup mapper
+        // setup mapper
         job.setMapperClass(MapForRankPop.class);
-// setup reducer
+        // setup reducer
         job.setReducerClass(ReduceForRankPop.class);
 
+        // add file to cache
         DistributedCache
                 .addCacheFile(
                         new URI(
                                 "/user/bigdata13/dataset/movies/movies.csv"),
                         config);
-
         DistributedCache
                 .addCacheFile(
                         new URI(
                                 "/user/bigdata13/dataset_large/movies/movies_large.csv"),
                         config);
 
-// set input/output path
+        // set input/output path
         Path input = new Path(files[0]);
         Path output = new Path(files[1]);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(IntWritable.class);
         FileInputFormat.addInputPath(job, input);
         FileOutputFormat.setOutputPath(job, output);
-// task completion
+
+        // task completion
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }

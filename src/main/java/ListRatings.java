@@ -64,7 +64,7 @@ public class ListRatings {
             for (Text value : values) {
                 String[] parts = value.toString().split("#");
                 if (parts[0].equals("Title")) {
-                    System.out.println(value.toString());
+                    // System.out.println(value.toString());
                     title = parts[1];
                 } else {
                     if (!parts[0].equals("movieId") && !parts[0].equals("rating")) {
