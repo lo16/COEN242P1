@@ -44,9 +44,10 @@ public class RankPop {
 
         protected void setup(Context context) throws IOException, InterruptedException {
             // pass path to movies.csv to loadMoviesHashMap
-            Path[] cacheFilesLocal = context.getLocalCacheFiles();
+            // Path[] cacheFilesLocal = context.getLocalCacheFiles();
+            URI[] cacheFilesLocal = Job.getInstance(context.getConfiguration()).getCacheFiles();
 
-            for (Path eachPath : cacheFilesLocal) {
+            for (URI eachPath : cacheFilesLocal) {
                 if (eachPath.getName().toString().trim().equals("movies.csv")) {
                     loadMoviesHashMap(eachPath, context);
                 }
@@ -103,18 +104,18 @@ public class RankPop {
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
 
         
-//         DistributedCache
-//                 .addCacheFile(
-//                         new URI(
-// //                                "resources/dataset/movies/movies.csv"),
-//                                 "/user/bigdata13/dataset/movies/movies.csv"),
-//                         config);
-//         DistributedCache
-//                 .addCacheFile(
-//                         new URI(
-// //                                "resources/dataset_large/movies/movies_large.csv"),
-//                                 "/user/bigdata13/dataset_large/movies/movies_large.csv"),
-//                         config);
+        DistributedCache
+                .addCacheFile(
+                        new URI(
+//                                "resources/dataset/movies/movies.csv"),
+                                "/user/bigdata13/dataset/movies/movies.csv"),
+                        config);
+        DistributedCache
+                .addCacheFile(
+                        new URI(
+//                                "resources/dataset_large/movies/movies_large.csv"),
+                                "/user/bigdata13/dataset_large/movies/movies_large.csv"),
+                        config);
 
         // setup mapreduce job
         Job job = new Job(config, "Part 1: rank pop");
@@ -124,13 +125,13 @@ public class RankPop {
         // setup reducer
         job.setReducerClass(ReduceForRankPop.class);
 
-        // add file to distributed cache
-        job.addCacheFile(new URI(
-//                                "resources/dataset/movies/movies.csv"),
-                                "/user/bigdata13/dataset/movies/movies.csv"));
-        job.addCacheFile(new URI(
-//                                "resources/dataset/movies/movies.csv"),
-                                "/user/bigdata13/dataset_large/movies/movies_large.csv"));
+//         // add file to distributed cache
+//         job.addCacheFile(new URI(
+// //                                "resources/dataset/movies/movies.csv"),
+//                                 "/user/bigdata13/dataset/movies/movies.csv"));
+//         job.addCacheFile(new URI(
+// //                                "resources/dataset/movies/movies.csv"),
+//                                 "/user/bigdata13/dataset_large/movies/movies_large.csv"));
 
         // set input/output path
         Path input = new Path(files[0] + "/reviews");
