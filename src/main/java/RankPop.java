@@ -25,16 +25,27 @@ import java.util.HashMap;
 public class RankPop {
     public static class MapForRankPop extends Mapper<LongWritable, Text, Text,
             IntWritable> {
+        public void map(LongWritable key, Text value, Context con) throws IOException,
+                InterruptedException {
 
+            String line = value.toString(); 
+            String[] words=line.split(",");
+            String movieId = words[1];
+
+            IntWritable outputValue = new IntWritable(1);
+            con.write(new Text(movieId), outputValue);
+        }
+    }
+
+    public static class ReduceForRankPop extends Reducer<Text, IntWritable, Text,
+            IntWritable> {
         private BufferedReader br;
         private static HashMap<String, String> movieTitles = new HashMap<String, String>();
-
-
 
         protected void setup(Context context) throws IOException, InterruptedException {
             // pass path to movies.csv to loadMoviesHashMap
             Path[] cacheFilesLocal = DistributedCache.getLocalCacheFiles(context
-                .getConfiguration());
+                    .getConfiguration());
 
             for (Path eachPath : cacheFilesLocal) {
                 if (eachPath.getName().toString().trim().equals("movies.csv")) {
@@ -43,10 +54,9 @@ public class RankPop {
             }
         }
 
-
         // open movies.csv and store movie titles in a hash table
-        private void loadMoviesHashMap(Path filePath, Context context)
-            throws IOException {
+        private void loadMoviesHashMap(Path filePath, Reducer.Context context)
+                throws IOException {
 
             String strLineRead = "";
 
@@ -76,28 +86,14 @@ public class RankPop {
             }
         }
 
-        public void map(LongWritable key, Text value, Context con) throws IOException,
-                InterruptedException {
-
-            String line = value.toString(); 
-            String[] words=line.split(",");
-            String movieId = words[1];
-
-            IntWritable outputValue = new IntWritable(1);
-            Text outputKey = new Text(movieTitles.get(movieId.trim()));
-            con.write(outputKey, outputValue);
-        }
-    }
-
-    public static class ReduceForRankPop extends Reducer<Text, IntWritable, Text,
-            IntWritable> {
-        public void reduce(Text word, Iterable<IntWritable> values, Context con) throws
+        public void reduce(Text movieId, Iterable<IntWritable> values, Context con) throws
                 IOException, InterruptedException {
+            Text outputKey = new Text(movieTitles.get(movieId).toString());
             int sum = 0;
             for (IntWritable value : values) {
                 sum += value.get();
             }
-            con.write(word, new IntWritable(sum));
+            con.write(outputKey, new IntWritable(sum));
         }
     }
 
@@ -106,6 +102,21 @@ public class RankPop {
         Configuration config = new Configuration();
 
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
+
+        // add file to cache
+        DistributedCache
+                .addCacheFile(
+                        new URI(
+//                                "resources/dataset/movies/movies.csv"),
+                                "/user/bigdata13/dataset/movies/movies.csv"),
+                        config);
+        DistributedCache
+                .addCacheFile(
+                        new URI(
+//                                "resources/dataset_large/movies/movies_large.csv"),
+                                "/user/bigdata13/dataset_large/movies/movies_large.csv"),
+                        config);
+
         // setup mapreduce job
         Job job = new Job(config, "Part 1: rank pop");
         job.setJarByClass(RankPop.class);
@@ -114,20 +125,9 @@ public class RankPop {
         // setup reducer
         job.setReducerClass(ReduceForRankPop.class);
 
-        // add file to cache
-        DistributedCache
-                .addCacheFile(
-                        new URI(
-                                "/user/bigdata13/dataset/movies/movies.csv"),
-                        config);
-        DistributedCache
-                .addCacheFile(
-                        new URI(
-                                "/user/bigdata13/dataset_large/movies/movies_large.csv"),
-                        config);
 
         // set input/output path
-        Path input = new Path(files[0]);
+        Path input = new Path(files[0] + "/reviews");
         Path output = new Path(files[1]);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(IntWritable.class);
