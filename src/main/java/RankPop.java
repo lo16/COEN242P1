@@ -1,3 +1,4 @@
+/*
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.io.IntWritable;
@@ -18,9 +19,11 @@ import java.io.BufferedReader;
 import java.net.URI;
 import java.util.HashMap;
 
+*/
 /**
  * List each movie's rating count, sort by rating count
- */
+ *//*
+
 
 public class RankPop {
     public static class MapForRankPop extends Mapper<LongWritable, Text, Text,
@@ -28,7 +31,7 @@ public class RankPop {
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
 
-            String line = value.toString(); 
+            String line = value.toString();
             String[] words=line.split(",");
             String movieId = words[1];
 
@@ -44,11 +47,11 @@ public class RankPop {
 
         protected void setup(Context context) throws IOException, InterruptedException {
             // pass path to movies.csv to loadMoviesHashMap
-            Path[] cacheFilesLocal = context.getCacheFiles();
+            Path[] cacheFilesLocal = DistributedCache.getLocalCacheFiles(context.getConfiguration());
             // URI[] cacheFilesLocal = Job.getInstance(context.getConfiguration()).getCacheFiles();
 
-            for (URI eachPath : cacheFilesLocal) {
-                if (eachPath.getPath().trim().equals("movies.csv")) {
+            for (Path eachPath : cacheFilesLocal) {
+                if (eachPath.getName().trim().equals("movies.csv")) {
                     loadMoviesHashMap(eachPath, context);
                 }
             }
@@ -104,7 +107,7 @@ public class RankPop {
 
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
 
-        
+
         DistributedCache
                 .addCacheFile(
                         new URI(
@@ -145,4 +148,4 @@ public class RankPop {
         // task completion
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
-}
+}*/

@@ -17,7 +17,7 @@ import java.io.IOException;
 
 
 /**
- * List all movies with avg rating >= 4.0, and review cnt > 10
+ * List each movie's rating count, sort by rating count
  */
 public class ReviewCount {
     public static class MoviesMapper extends Mapper<LongWritable, Text, Text,
