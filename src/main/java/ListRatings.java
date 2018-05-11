@@ -17,7 +17,7 @@ import java.io.IOException;
 
 
 /**
- * List all movies with avg rating > 4.0
+ * List all movies with avg rating >= 4.0, and review cnt > 10
  */
 public class ListRatings {
     public static class MoviesMapper extends Mapper<LongWritable, Text, Text,
@@ -29,7 +29,12 @@ public class ListRatings {
             for (String line : lines) {
                 String[] parts = line.split(",");
                 Text outputKey = new Text(parts[0]);
-                Text outputValue = new Text("Title#" + parts[1]);
+                String title = parts[1];
+                for (int i = 2; i < parts.length - 1; i ++) {
+                    title = title + "," + parts[i];
+                }
+                title = title.replaceAll("^\"|\"$", "");
+                Text outputValue = new Text("Title#" + title);
                 con.write(outputKey, outputValue);
             }
         }
@@ -73,7 +78,7 @@ public class ListRatings {
                     }
                 }
             }
-            if (cnt >= 10 && sum / cnt >= 4.0) {
+            if (cnt > 10 && sum / cnt >= 4.0) {
                 con.write(new Text(title), new Text(String.format("%f\t%d", sum / cnt, cnt)));
             }
         }
