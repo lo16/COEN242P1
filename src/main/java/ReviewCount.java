@@ -76,7 +76,7 @@ public class ReviewCount {
                 }
             }
             
-            con.write(new Text(title), new Text(Integer.toString(cnt)));
+            con.write(new Text(Integer.toString(cnt)), new Text(title));
             
         }
     }
