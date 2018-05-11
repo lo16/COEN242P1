@@ -48,7 +48,7 @@ public class RankPop {
             URI[] cacheFilesLocal = Job.getInstance(context.getConfiguration()).getCacheFiles();
 
             for (URI eachPath : cacheFilesLocal) {
-                if (eachPath.getName().toString().trim().equals("movies.csv")) {
+                if (eachPath.getPath().trim().equals("movies.csv")) {
                     loadMoviesHashMap(eachPath, context);
                 }
             }
