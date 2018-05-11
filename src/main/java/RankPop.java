@@ -73,6 +73,7 @@ public class RankPop {
                     for (int i = 2; i < movieFields.length - 1; i++) {
                         movieTitle = movieTitle + ", " + movieFields[i];
                     }
+                    movieTitle = movieTitle.replaceAll("^\"|\"$", "");
                     movieTitles.put(movieId.trim(), movieTitle.trim());
                 }
             } catch (FileNotFoundException e) {
