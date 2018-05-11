@@ -44,8 +44,8 @@ public class RankPop {
 
         protected void setup(Context context) throws IOException, InterruptedException {
             // pass path to movies.csv to loadMoviesHashMap
-            // Path[] cacheFilesLocal = context.getLocalCacheFiles();
-            URI[] cacheFilesLocal = Job.getInstance(context.getConfiguration()).getCacheFiles();
+            Path[] cacheFilesLocal = context.getCacheFiles();
+            // URI[] cacheFilesLocal = Job.getInstance(context.getConfiguration()).getCacheFiles();
 
             for (URI eachPath : cacheFilesLocal) {
                 if (eachPath.getPath().trim().equals("movies.csv")) {
