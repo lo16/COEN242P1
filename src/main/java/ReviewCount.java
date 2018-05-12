@@ -14,14 +14,17 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 
 /**
  * List each movie's rating count, sort by rating count
  */
 public class ReviewCount {
-    public static class MoviesMapper extends Mapper<LongWritable, Text, Text,
+    public static class MoviesMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
+        @Override
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
             // The start line number, if key == 0, then the first line is csv header
@@ -34,20 +37,23 @@ public class ReviewCount {
             for (int i = start; i < lines.length; i++) {
                 String line = lines[i];
                 String[] parts = line.split(",");
-                Text outputKey = new Text(parts[0]);
                 String title = parts[1];
                 for (int j = 2; j < parts.length - 1; j++) {
                     title = title + "," + parts[i];
                 }
                 title = title.replaceAll("^\"|\"$", "");
+                IntWritable outputKey = new IntWritable(Integer.parseInt(parts[0]));
                 Text outputValue = new Text("Title#" + title);
                 con.write(outputKey, outputValue);
             }
         }
     }
 
-    public static class ReviewsMapper extends Mapper<LongWritable, Text, Text,
+    public static class ReviewsMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
+        private Map<Integer, Integer> reviewsMap= new HashMap<>();
+
+        @Override
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
             // The start line number, if key == 0, then the first line is csv header
@@ -60,15 +66,27 @@ public class ReviewCount {
             for (int i = start; i < lines.length; i++) {
                 String line = lines[i];
                 String[] parts = line.split(",");
-                Text outputKey = new Text(parts[1]);
-                Text outputValue = new Text("1");
-                con.write(outputKey, outputValue);
+                Integer movieId = Integer.parseInt(parts[1]);
+
+                if (!reviewsMap.containsKey(movieId)) {
+                    reviewsMap.put(movieId, 1);
+                } else {
+                    reviewsMap.put(movieId, reviewsMap.get(movieId) + 1);
+                }
+            }
+        }
+
+        @Override
+        public void cleanup(Context con) throws IOException, InterruptedException {
+            for (Integer movieId : reviewsMap.keySet()) {
+                con.write(new IntWritable(movieId), new Text(reviewsMap.get(movieId) + ""));
             }
         }
     }
 
-    public static class ReducerForReviewCount extends Reducer<Text, Text, Text, Text> {
-        public void reduce(Text movieId, Iterable<Text> values, Context con) throws
+    public static class ReducerForReviewCount extends Reducer<IntWritable, Text, Text, Text> {
+        @Override
+        public void reduce(IntWritable movieId, Iterable<Text> values, Context con) throws
                 IOException, InterruptedException {
             // Count of ratings (how many people rates)
             int cnt = 0;
@@ -77,17 +95,14 @@ public class ReviewCount {
 
             // System.out.println(values.toString());
             for (Text value : values) {
-                String[] parts = value.toString().split("#");
-                if (parts[0].equals("Title")) {
-                    // System.out.println(value.toString());
-                    title = parts[1];
+                String tmp = value.toString();
+                if (tmp.indexOf("Title#") == 0) {
+                    title = tmp.substring(6);
                 } else {
-                    cnt += 1;
+                    cnt += Integer.parseInt(tmp);
                 }
             }
-            
             con.write(new Text(Integer.toString(cnt)), new Text(title));
-            
         }
     }
 
@@ -107,7 +122,7 @@ public class ReviewCount {
         Path input1 = new Path(path_base + "/movies");
         Path input2 = new Path(path_base + "/reviews");
         Path output = new Path(files[1]);
-        job.setOutputKeyClass(Text.class);
+        job.setOutputKeyClass(IntWritable.class);
         job.setOutputValueClass(Text.class);
         MultipleInputs.addInputPath(job, input1, TextInputFormat.class, MoviesMapper.class);
         MultipleInputs.addInputPath(job, input2, TextInputFormat.class, ReviewsMapper.class);
