@@ -106,6 +106,21 @@ public class ReviewCount {
         }
     }
 
+    public static class SortMapper extends Mapper<Text, Text, IntWritable,
+            Text> {
+        public void map(Text key, Text value, Context con) throws IOException,
+                InterruptedException {
+            con.write(new IntWritable(Integer(value.toString())), key);
+        }
+    }
+
+    public static class SortReducer extends Reducer<IntWritable, Text, Text, Text> {
+        public void reduce(IntWritable key, Text value, Context con) throws 
+                IOException, InterruptedException {
+            con.write(new Text(key), value);            
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         // Get input argument and setup configuration
         Configuration config = new Configuration();
@@ -128,7 +143,17 @@ public class ReviewCount {
         MultipleInputs.addInputPath(job, input2, TextInputFormat.class, ReviewsMapper.class);
         FileOutputFormat.setOutputPath(job, output);
 
+        //sort previous job results
+        Job job2 = new Job(config, "sorting output");
+        job2.setJarByClass(ReviewCount.class);
+        job2.setMapperClass(SortMapper.class);
+        job2.setReducerClass(SortReducer.class);
+        job2.setOutputKeyClass(Text.class);
+        job2.setOutputValueClass(Text.class);
+        FileInputFormat.addInputPath(job2, output);
+        FileOutputFormat.setOutputPath(job2, output);
+
         // task completion
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
+        System.exit(job2.waitForCompletion(true) ? 0 : 1);
     }
 }
