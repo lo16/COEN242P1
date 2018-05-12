@@ -41,6 +41,7 @@ public class ReviewCount {
                     title = title + "," + parts[j];
                 }
                 title = title.replaceAll("^\"|\"$", "");
+
                 IntWritable outputKey = new IntWritable(Integer.parseInt(parts[0]));
                 Text outputValue = new Text("Title#" + title);
                 con.write(outputKey, outputValue);

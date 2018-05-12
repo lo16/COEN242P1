@@ -14,13 +14,15 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 
 /**
  * List all movies with avg rating >= 4.0, and review cnt > 10
  */
 public class ListRatings {
-    public static class MoviesMapper extends Mapper<LongWritable, Text, Text,
+    public static class MoviesMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
@@ -34,20 +36,27 @@ public class ListRatings {
             for (int i = start; i < lines.length; i++) {
                 String line = lines[i];
                 String[] parts = line.split(",");
-                Text outputKey = new Text(parts[0]);
+
                 String title = parts[1];
                 for (int j = 2; j < parts.length - 1; j ++) {
                     title = title + "," + parts[j];
                 }
                 title = title.replaceAll("^\"|\"$", "");
+
+                IntWritable outputKey = new IntWritable(Integer.parseInt(parts[0]));
                 Text outputValue = new Text("Title#" + title);
                 con.write(outputKey, outputValue);
             }
         }
     }
 
-    public static class ReviewsMapper extends Mapper<LongWritable, Text, Text,
+    public static class ReviewsMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
+        // HashMap: key - movie Id, value - how many people rate
+        private Map<Integer, Integer> cntMap= new HashMap<>();
+        // HashMap: key - movie Id, value - the sum of ratings
+        private Map<Integer, Double> sumMap= new HashMap<>();
+
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
             // The start line number, if key == 0, then the first line is csv header
@@ -60,15 +69,37 @@ public class ListRatings {
             for (int i = start; i < lines.length; i++) {
                 String line = lines[i];
                 String[] parts = line.split(",");
-                Text outputKey = new Text(parts[1]);
-                Text outputValue = new Text(parts[2]);
-                con.write(outputKey, outputValue);
+
+                Integer movieId = Integer.parseInt(parts[1]);
+                Double rating = Double.parseDouble(parts[2]);
+
+                if (!cntMap.containsKey(movieId)) {
+                    cntMap.put(movieId, 1);
+                } else {
+                    cntMap.put(movieId, cntMap.get(movieId) + 1);
+                }
+
+                if (!sumMap.containsKey(movieId)) {
+                    sumMap.put(movieId, rating);
+                } else {
+                    sumMap.put(movieId, sumMap.get(movieId) + rating);
+                }
+            }
+        }
+
+        @Override
+        public void cleanup(Context con) throws IOException, InterruptedException {
+            for (Integer movieId : cntMap.keySet()) {
+                Double sum = sumMap.get(movieId);
+                Integer cnt = cntMap.get(movieId);
+                Text outputValue = new Text(String.format("%.16f\t%d", sum, cnt));
+                con.write(new IntWritable(movieId), outputValue);
             }
         }
     }
 
-    public static class ReducerForListRatings extends Reducer<Text, Text, Text, Text> {
-        public void reduce(Text movieId, Iterable<Text> values, Context con) throws
+    public static class Stage1Reducer extends Reducer<IntWritable, Text, Text, Text> {
+        public void reduce(IntWritable movieId, Iterable<Text> values, Context con) throws
                 IOException, InterruptedException {
             // Sum of rating points
             double sum = 0;
@@ -79,17 +110,18 @@ public class ListRatings {
 
             // System.out.println(values.toString());
             for (Text value : values) {
-                String[] parts = value.toString().split("#");
-                if (parts[0].equals("Title")) {
-                    // System.out.println(value.toString());
-                    title = parts[1];
+                String tmp = value.toString();
+                if (tmp.indexOf("Title#") == 0) {
+                    title = tmp.substring(6);
                 } else {
+                    String[] parts = tmp.split("\t");
                     sum += Double.parseDouble(parts[0]);
-                    cnt += 1;
+                    cnt += Integer.parseInt(parts[1]);
                 }
             }
-            if (cnt > 10 && sum / cnt >= 4.0) {
-                con.write(new Text(title), new Text(String.format("%.16f\t%d", sum / cnt, cnt)));
+            Double avg = sum / cnt;
+            if (cnt > 10 && avg > 4.0) {
+                con.write(new Text(title), new Text(String.format("%.16f\t%d", avg, cnt)));
             }
         }
     }
@@ -99,24 +131,24 @@ public class ListRatings {
         Configuration config = new Configuration();
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
 
-        // setup mapreduce job
-        Job job = new Job(config, "Part 2: list ratings");
-        job.setJarByClass(ListRatings.class);
+        // Setup mapreduce job
+        Job job1 = new Job(config, "Part 2: list ratings - Stage 1: Filter movies");
+        job1.setJarByClass(ListRatings.class);
         // setup reducer
-        job.setReducerClass(ReducerForListRatings.class);
+        job1.setReducerClass(Stage1Reducer.class);
 
-        // set input/output path & mapper
+        // Set input/output path & mapper
         String path_base = files[0];
         Path input1 = new Path(path_base + "/movies");
         Path input2 = new Path(path_base + "/reviews");
         Path output = new Path(files[1]);
-        job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(Text.class);
-        MultipleInputs.addInputPath(job, input1, TextInputFormat.class, MoviesMapper.class);
-        MultipleInputs.addInputPath(job, input2, TextInputFormat.class, ReviewsMapper.class);
-        FileOutputFormat.setOutputPath(job, output);
+        job1.setOutputKeyClass(IntWritable.class);
+        job1.setOutputValueClass(Text.class);
+        MultipleInputs.addInputPath(job1, input1, TextInputFormat.class, MoviesMapper.class);
+        MultipleInputs.addInputPath(job1, input2, TextInputFormat.class, ReviewsMapper.class);
+        FileOutputFormat.setOutputPath(job1, output);
 
         // task completion
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
+        System.exit(job1.waitForCompletion(true) ? 0 : 1);
     }
 }
