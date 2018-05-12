@@ -24,14 +24,20 @@ public class ListRatings {
             Text> {
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
+            // The start line number, if key == 0, then the first line is csv header
+            int start = 0;
+            if (key.get() == 0) start = 1;
+
             String text = value.toString();
             String[] lines = text.split("\n");
-            for (String line : lines) {
+
+            for (int i = start; i < lines.length; i++) {
+                String line = lines[i];
                 String[] parts = line.split(",");
                 Text outputKey = new Text(parts[0]);
                 String title = parts[1];
-                for (int i = 2; i < parts.length - 1; i ++) {
-                    title = title + "," + parts[i];
+                for (int j = 2; j < parts.length - 1; j ++) {
+                    title = title + "," + parts[j];
                 }
                 title = title.replaceAll("^\"|\"$", "");
                 Text outputValue = new Text("Title#" + title);
@@ -44,9 +50,15 @@ public class ListRatings {
             Text> {
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
+            // The start line number, if key == 0, then the first line is csv header
+            int start = 0;
+            if (key.get() == 0) start = 1;
+
             String text = value.toString();
             String[] lines = text.split("\n");
-            for (String line : lines) {
+
+            for (int i = start; i < lines.length; i++) {
+                String line = lines[i];
                 String[] parts = line.split(",");
                 Text outputKey = new Text(parts[1]);
                 Text outputValue = new Text(parts[2]);
@@ -72,10 +84,8 @@ public class ListRatings {
                     // System.out.println(value.toString());
                     title = parts[1];
                 } else {
-                    if (!parts[0].equals("movieId") && !parts[0].equals("rating")) {
-                        sum += Double.parseDouble(parts[0]);
-                        cnt += 1;
-                    }
+                    sum += Double.parseDouble(parts[0]);
+                    cnt += 1;
                 }
             }
             if (cnt > 10 && sum / cnt >= 4.0) {
