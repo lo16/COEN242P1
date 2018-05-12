@@ -38,7 +38,7 @@ public class ReviewCount {
                 String[] parts = line.split(",");
                 String title = parts[1];
                 for (int j = 2; j < parts.length - 1; j++) {
-                    title = title + "," + parts[i];
+                    title = title + "," + parts[j];
                 }
                 title = title.replaceAll("^\"|\"$", "");
                 IntWritable outputKey = new IntWritable(Integer.parseInt(parts[0]));
