@@ -1,16 +1,15 @@
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.FloatWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
@@ -84,7 +83,7 @@ public class ReviewCount {
         }
     }
 
-    public static class ReducerForReviewCount extends Reducer<IntWritable, Text, Text, Text> {
+    public static class Stage1Reducer extends Reducer<IntWritable, Text, IntWritable, Text> {
         @Override
         public void reduce(IntWritable movieId, Iterable<Text> values, Context con) throws
                 IOException, InterruptedException {
@@ -102,22 +101,33 @@ public class ReviewCount {
                     cnt += Integer.parseInt(tmp);
                 }
             }
-            con.write(new Text(Integer.toString(cnt)), new Text(title));
+            if (cnt > 0) {
+                con.write(new IntWritable(cnt), new Text(title));
+            }
         }
     }
 
-    public static class SortMapper extends Mapper<Text, Text, IntWritable,
+    public static class SortMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
-        public void map(Text key, Text value, Context con) throws IOException,
+        @Override
+        public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
-            con.write(new IntWritable(Integer(value.toString())), key);
+            String[] lines = value.toString().split("\n");
+
+            for (String line : lines) {
+                String[] parts = line.split("\t");
+                con.write(new IntWritable(Integer.parseInt(parts[0])), new Text(parts[1]));
+            }
         }
     }
 
-    public static class SortReducer extends Reducer<IntWritable, Text, Text, Text> {
-        public void reduce(IntWritable key, Text value, Context con) throws 
+    public static class SortReducer extends Reducer<IntWritable, Text, IntWritable, Text> {
+        @Override
+        public void reduce(IntWritable cnt, Iterable<Text> values, Context con) throws
                 IOException, InterruptedException {
-            con.write(new Text(key), value);            
+            for (Text value : values) {
+                con.write(cnt, value);
+            }
         }
     }
 
@@ -127,33 +137,43 @@ public class ReviewCount {
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
 
         // setup mapreduce job
-        Job job = new Job(config, "Part 1: review count");
-        job.setJarByClass(ReviewCount.class);
+        Job job1 = new Job(config, "Part 1: review count - Stage 1: Get counts of each movie");
+        job1.setJarByClass(ReviewCount.class);
         // setup reducer
-        job.setReducerClass(ReducerForReviewCount.class);
+        job1.setReducerClass(Stage1Reducer.class);
 
         // set input/output path & mapper
         String path_base = files[0];
         Path input1 = new Path(path_base + "/movies");
         Path input2 = new Path(path_base + "/reviews");
-        Path output = new Path(files[1]);
-        job.setOutputKeyClass(IntWritable.class);
-        job.setOutputValueClass(Text.class);
-        MultipleInputs.addInputPath(job, input1, TextInputFormat.class, MoviesMapper.class);
-        MultipleInputs.addInputPath(job, input2, TextInputFormat.class, ReviewsMapper.class);
-        FileOutputFormat.setOutputPath(job, output);
-
-        //sort previous job results
-        Job job2 = new Job(config, "sorting output");
-        job2.setJarByClass(ReviewCount.class);
-        job2.setMapperClass(SortMapper.class);
-        job2.setReducerClass(SortReducer.class);
-        job2.setOutputKeyClass(Text.class);
-        job2.setOutputValueClass(Text.class);
-        FileInputFormat.addInputPath(job2, output);
-        FileOutputFormat.setOutputPath(job2, output);
+        Path stage1output = new Path(files[1] + "/stage1");
+        job1.setOutputKeyClass(IntWritable.class);
+        job1.setOutputValueClass(Text.class);
+        MultipleInputs.addInputPath(job1, input1, TextInputFormat.class, MoviesMapper.class);
+        MultipleInputs.addInputPath(job1, input2, TextInputFormat.class, ReviewsMapper.class);
+        FileOutputFormat.setOutputPath(job1, stage1output);
 
         // task completion
-        System.exit(job2.waitForCompletion(true) ? 0 : 1);
+        int code = job1.waitForCompletion(true) ? 0 : 1;
+
+        //sort previous job results
+        if (code == 0) {
+            Job job2 = new Job(config, "Part 1: review count - Stage 2: Sort by counts");
+            job2.setJarByClass(ReviewCount.class);
+
+            job2.setMapperClass(SortMapper.class);
+            job2.setReducerClass(SortReducer.class);
+            job2.setOutputKeyClass(IntWritable.class);
+            job2.setOutputValueClass(Text.class);
+
+            // Set input/output path & mapper
+            Path stage2output = new Path(files[1] + "/stage2");
+            FileInputFormat.addInputPath(job2, stage1output);
+            FileOutputFormat.setOutputPath(job2, stage2output);
+
+            System.exit(job2.waitForCompletion(true) ? 0 : 1);
+        } else {
+            System.exit(1);
+        }
     }
 }
