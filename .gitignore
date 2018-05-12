@@ -1,7 +1,8 @@
 .DS_Store
 log/
 target/
-output/
+output1/
+output2/
 *.iml
 *.iws
 .idea/

@@ -89,7 +89,7 @@ public class ListRatings {
                 }
             }
             if (cnt > 10 && sum / cnt >= 4.0) {
-                con.write(new Text(title), new Text(String.format("%f\t%d", sum / cnt, cnt)));
+                con.write(new Text(title), new Text(String.format("%.16f\t%d", sum / cnt, cnt)));
             }
         }
     }
