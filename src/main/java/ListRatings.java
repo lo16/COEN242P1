@@ -1,8 +1,5 @@
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.FloatWritable;
-import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.util.GenericOptionsParser;
@@ -24,6 +21,7 @@ import java.util.Map;
 public class ListRatings {
     public static class MoviesMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
+        @Override
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
             // The start line number, if key == 0, then the first line is csv header
@@ -57,6 +55,7 @@ public class ListRatings {
         // HashMap: key - movie Id, value - the sum of ratings
         private Map<Integer, Double> sumMap= new HashMap<>();
 
+        @Override
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
             // The start line number, if key == 0, then the first line is csv header
@@ -99,6 +98,7 @@ public class ListRatings {
     }
 
     public static class Stage1Reducer extends Reducer<IntWritable, Text, Text, Text> {
+        @Override
         public void reduce(IntWritable movieId, Iterable<Text> values, Context con) throws
                 IOException, InterruptedException {
             // Sum of rating points
@@ -126,6 +126,35 @@ public class ListRatings {
         }
     }
 
+    public static class SortMapper extends Mapper<LongWritable, Text, DoubleWritable,
+            Text> {
+        @Override
+        public void map(LongWritable key, Text value, Context con) throws IOException,
+                InterruptedException {
+            String[] lines = value.toString().split("\n");
+
+            for (String line : lines) {
+                String[] parts = line.split("\t");
+                DoubleWritable rating = new DoubleWritable(Double.parseDouble(parts[1]));
+                con.write(rating, new Text(parts[0] + "\t" + parts[2]));
+            }
+        }
+    }
+
+    public static class SortReducer extends Reducer<DoubleWritable, Text, Text, Text> {
+        @Override
+        public void reduce(DoubleWritable rating, Iterable<Text> values, Context con) throws
+                IOException, InterruptedException {
+            for (Text value : values) {
+                String[] parts = value.toString().split("\t");
+
+                Text outputKey = new Text(parts[0]);
+                Text outputValue = new Text(String.format("%.16f\t%s", rating.get(), parts[1]));
+                con.write(outputKey, outputValue);
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         // Get input argument and setup configuration
         Configuration config = new Configuration();
@@ -141,14 +170,38 @@ public class ListRatings {
         String path_base = files[0];
         Path input1 = new Path(path_base + "/movies");
         Path input2 = new Path(path_base + "/reviews");
-        Path output = new Path(files[1]);
-        job1.setOutputKeyClass(IntWritable.class);
+        Path stage1output = new Path(files[1] + "/stage1");
+        job1.setMapOutputKeyClass(IntWritable.class);
+        job1.setMapOutputValueClass(Text.class);
+        job1.setOutputKeyClass(Text.class);
         job1.setOutputValueClass(Text.class);
         MultipleInputs.addInputPath(job1, input1, TextInputFormat.class, MoviesMapper.class);
         MultipleInputs.addInputPath(job1, input2, TextInputFormat.class, ReviewsMapper.class);
-        FileOutputFormat.setOutputPath(job1, output);
+        FileOutputFormat.setOutputPath(job1, stage1output);
 
-        // task completion
-        System.exit(job1.waitForCompletion(true) ? 0 : 1);
+        // Task completion
+        int code = job1.waitForCompletion(true) ? 0 : 1;
+
+        // Sort previous job results
+        if (code == 0) {
+            Job job2 = new Job(config, "Part 2: review count - Stage 2: Sort by rating");
+            job2.setJarByClass(ListRatings.class);
+
+            job2.setMapperClass(SortMapper.class);
+            job2.setReducerClass(SortReducer.class);
+            job2.setMapOutputKeyClass(DoubleWritable.class);
+            job2.setMapOutputValueClass(Text.class);
+            job2.setOutputKeyClass(Text.class);
+            job2.setOutputValueClass(Text.class);
+
+            // Set input/output path & mapper
+            Path stage2output = new Path(files[1] + "/stage2");
+            FileInputFormat.addInputPath(job2, stage1output);
+            FileOutputFormat.setOutputPath(job2, stage2output);
+
+            System.exit(job2.waitForCompletion(true) ? 0 : 1);
+        } else {
+            System.exit(1);
+        }
     }
 }
