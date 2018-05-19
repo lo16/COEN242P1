@@ -16,31 +16,38 @@ import java.util.Map;
 
 
 /**
- * List all movies with avg rating >= 4.0, and review cnt > 10
+ * List all movies with avg rating >= 4.0, and review count > 10
  */
 public class ListRatings {
     public static class MoviesMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
+
         @Override
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
-            // The start line number, if key == 0, then the first line is csv header
+
+            // If key == 0, skip the first line, which is the csv header
             int start = 0;
             if (key.get() == 0) start = 1;
 
+            // Split the text into lines
             String text = value.toString();
             String[] lines = text.split("\n");
 
+            // Separate the columns
             for (int i = start; i < lines.length; i++) {
                 String line = lines[i];
                 String[] parts = line.split(",");
 
+                // Handle commas in movie titles
                 String title = parts[1];
                 for (int j = 2; j < parts.length - 1; j ++) {
                     title = title + "," + parts[j];
                 }
+                // Remove quotation marks
                 title = title.replaceAll("^\"|\"$", "");
 
+                // Emit movie ID as key, movie title as value
                 IntWritable outputKey = new IntWritable(Integer.parseInt(parts[0]));
                 Text outputValue = new Text("Title#" + title);
                 con.write(outputKey, outputValue);
@@ -50,34 +57,41 @@ public class ListRatings {
 
     public static class ReviewsMapper extends Mapper<LongWritable, Text, IntWritable,
             Text> {
-        // HashMap: key - movie Id, value - how many people rate
+
+        // HashMap: key - movie ID, value - amount of ratings
         private Map<Integer, Integer> cntMap= new HashMap<>();
-        // HashMap: key - movie Id, value - the sum of ratings
+        // HashMap: key - movie ID, value - the sum of ratings
         private Map<Integer, Double> sumMap= new HashMap<>();
 
         @Override
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
-            // The start line number, if key == 0, then the first line is csv header
+
+            // If key == 0, skip the first line, which is the csv header
             int start = 0;
             if (key.get() == 0) start = 1;
 
+            // Split the text into lines
             String text = value.toString();
             String[] lines = text.split("\n");
 
+            // Separate the columns
             for (int i = start; i < lines.length; i++) {
                 String line = lines[i];
                 String[] parts = line.split(",");
 
+                // Extract movie ID and rating values
                 Integer movieId = Integer.parseInt(parts[1]);
                 Double rating = Double.parseDouble(parts[2]);
 
+                // Increment ratings count for this movie
                 if (!cntMap.containsKey(movieId)) {
                     cntMap.put(movieId, 1);
                 } else {
                     cntMap.put(movieId, cntMap.get(movieId) + 1);
                 }
 
+                // Add rating to sumMap
                 if (!sumMap.containsKey(movieId)) {
                     sumMap.put(movieId, rating);
                 } else {
@@ -88,6 +102,8 @@ public class ListRatings {
 
         @Override
         public void cleanup(Context con) throws IOException, InterruptedException {
+
+            // Emit the sum and count of ratings for each movie seen
             for (Integer movieId : cntMap.keySet()) {
                 Double sum = sumMap.get(movieId);
                 Integer cnt = cntMap.get(movieId);
@@ -97,28 +113,35 @@ public class ListRatings {
         }
     }
 
+    // Output of this reduce step is not sorted, which is done in the next job
     public static class Stage1Reducer extends Reducer<IntWritable, Text, Text, Text> {
+
         @Override
         public void reduce(IntWritable movieId, Iterable<Text> values, Context con) throws
                 IOException, InterruptedException {
+
             // Sum of rating points
             double sum = 0;
-            // Count of ratings (how many people rates)
+            // Count of ratings
             int cnt = 0;
             // Movie title
             String title = "";
 
-            // System.out.println(values.toString());
+            // Extract data from either mapper
             for (Text value : values) {
                 String tmp = value.toString();
                 if (tmp.indexOf("Title#") == 0) {
+                    // Extract title from MoviesMapper
                     title = tmp.substring(6);
                 } else {
+                    // Add up sums and counts from each ReviewsMapper task
                     String[] parts = tmp.split("\t");
                     sum += Double.parseDouble(parts[0]);
                     cnt += Integer.parseInt(parts[1]);
                 }
             }
+
+            // Calculate average rating and filter out movies with low ratings
             Double avg = sum / cnt;
             if (cnt > 10 && avg > 4.0) {
                 con.write(new Text(title), new Text(String.format("%.16f\t%d", avg, cnt)));
@@ -126,13 +149,17 @@ public class ListRatings {
         }
     }
 
+    // Simple mapper used for sorting results
     public static class SortMapper extends Mapper<LongWritable, Text, DoubleWritable,
             Text> {
+
         @Override
         public void map(LongWritable key, Text value, Context con) throws IOException,
                 InterruptedException {
+            // Split input by row for sorting
             String[] lines = value.toString().split("\n");
 
+            // Emit rating as key, so it can be used in the sorting step
             for (String line : lines) {
                 String[] parts = line.split("\t");
                 DoubleWritable rating = new DoubleWritable(Double.parseDouble(parts[1]));
@@ -141,15 +168,17 @@ public class ListRatings {
         }
     }
 
+    // Simple reducer used for sorting results
     public static class SortReducer extends Reducer<DoubleWritable, Text, Text, Text> {
         @Override
-        public void reduce(DoubleWritable rating, Iterable<Text> values, Context con) throws
+        public void reduce(DoubleWritable key, Iterable<Text> values, Context con) throws
                 IOException, InterruptedException {
             for (Text value : values) {
                 String[] parts = value.toString().split("\t");
 
+                // Output rating and title
                 Text outputKey = new Text(parts[0]);
-                Text outputValue = new Text(String.format("%.16f\t%s", rating.get(), parts[1]));
+                Text outputValue = new Text(String.format("%.16f\t%s", key.get(), parts[1]));
                 con.write(outputKey, outputValue);
             }
         }
@@ -160,13 +189,13 @@ public class ListRatings {
         Configuration config = new Configuration();
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
 
-        // Setup mapreduce job
+        // Set up MapReduce job
         Job job1 = new Job(config, "Part 2: list ratings - Stage 1: Filter movies");
         job1.setJarByClass(ListRatings.class);
-        // setup reducer
+        // Set up reducer
         job1.setReducerClass(Stage1Reducer.class);
 
-        // Set input/output path & mapper
+        // Set up input/output path & mappers
         String path_base = files[0];
         Path input1 = new Path(path_base + "/movies");
         Path input2 = new Path(path_base + "/reviews");
