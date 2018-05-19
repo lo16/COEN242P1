@@ -16,7 +16,7 @@ import java.util.Map;
 
 
 /**
- * List all movies with avg rating >= 4.0, and review count > 10
+ * List all movies with avg rating > 4.0, and review count > 10
  */
 public class ListRatings {
     public static class MoviesMapper extends Mapper<LongWritable, Text, IntWritable,
