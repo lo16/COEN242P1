@@ -185,6 +185,7 @@ public class ListRatings {
     }
 
     public static void main(String[] args) throws Exception {
+        long startTime = System.nanoTime();
         // Get input argument and setup configuration
         Configuration config = new Configuration();
         String[] files = new GenericOptionsParser(config, args).getRemainingArgs();
@@ -228,7 +229,11 @@ public class ListRatings {
             FileInputFormat.addInputPath(job2, stage1output);
             FileOutputFormat.setOutputPath(job2, stage2output);
 
-            System.exit(job2.waitForCompletion(true) ? 0 : 1);
+            int code2 = job2.waitForCompletion(true) ? 0 : 1;
+            long endTime   = System.nanoTime();
+            long totalTime = endTime - startTime;
+            System.out.println("Total real time spent: " + totalTime / 1000000000.0 + "s");
+            System.exit(code2 == 0 ? 0 : 1);
         } else {
             System.exit(1);
         }
